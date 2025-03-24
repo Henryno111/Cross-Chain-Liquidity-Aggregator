@@ -281,3 +281,64 @@
         last-updated: block-height
       }
     )
+       (ok { chain: chain-id, token: token-id })
+  )
+)
+
+;; Map a token across chains
+(define-public (map-token
+  (source-chain (string-ascii 20))
+  (source-token (string-ascii 20))
+  (target-chain (string-ascii 20))
+  (target-token (string-ascii 20)))
+  
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (is-some (map-get? chains { chain-id: source-chain })) err-chain-not-found)
+    (asserts! (is-some (map-get? chains { chain-id: target-chain })) err-chain-not-found)
+    
+    ;; Create token mapping
+    (map-set token-mappings
+      { source-chain: source-chain, source-token: source-token, target-chain: target-chain }
+      { target-token: target-token }
+    )
+    
+    ;; Create reverse mapping
+    (map-set token-mappings
+      { source-chain: target-chain, source-token: target-token, target-chain: source-chain }
+      { target-token: source-token }
+    )
+    
+    (ok true)
+  )
+)
+
+;; Register a price oracle
+(define-public (register-oracle
+  (chain-id (string-ascii 20))
+  (token-id (string-ascii 20))
+  (oracle-contract principal)
+  (heartbeat uint)
+  (deviation-threshold uint))
+  
+  (begin
+    (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+    (asserts! (is-some (map-get? chains { chain-id: chain-id })) err-chain-not-found)
+    
+    ;; Validate parameters
+    (asserts! (> heartbeat u0) err-invalid-parameters)
+    (asserts! (< deviation-threshold u10000) err-invalid-parameters) ;; Max 100% deviation threshold
+    
+    ;; Create oracle record
+    (map-set price-oracles
+      { chain-id: chain-id, token-id: token-id }
+      {
+        oracle-contract: oracle-contract,
+        last-price: u0,
+        last-updated: block-height,
+        heartbeat: heartbeat,
+        deviation-threshold: deviation-threshold,
+        trusted: true
+      }
+    )
+    
