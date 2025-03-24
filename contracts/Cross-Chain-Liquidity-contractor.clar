@@ -736,4 +736,147 @@
     )
   )
 )
-        
+;; Refund a swap after timeout
+(define-public (refund-swap (swap-id uint))
+  (let (
+    (initiator tx-sender)
+    (swap (unwrap! (map-get? swaps { swap-id: swap-id }) err-swap-not-found))
+  )
+    ;; Validate swap state
+    (asserts! (is-eq (get status swap) u0) err-already-executed) ;; Must be pending
+    (asserts! (>= block-height (get timeout-block swap)) err-timeout-not-reached) ;; Timeout must be reached
+    (asserts! (is-eq initiator (get initiator swap)) err-not-authorized) ;; Only initiator can refund
+    
+    ;; Get source info
+    (let (
+      (source-chain (get source-chain swap))
+      (source-token (get source-token swap))
+      (source-amount (get source-amount swap))
+      (protocol-fee (get protocol-fee swap))
+      (source-pool (unwrap! (map-get? liquidity-pools { chain-id: source-chain, token-id: source-token }) err-pool-not-found))
+      (source-chain-info (unwrap! (map-get? chains { chain-id: source-chain }) err-chain-not-found))
+      (net-amount (- source-amount protocol-fee))
+    )
+      ;; Return tokens to initiator (minus protocol fee)
+      (if (is-eq source-chain "stacks")
+        ;; For STX tokens
+        (if (is-eq source-token "stx")
+          (as-contract (try! (stx-transfer? net-amount (as-contract tx-sender) initiator)))
+          ;; For other tokens on Stacks
+          (as-contract (try! (contract-call? (get token-contract source-pool) transfer net-amount (as-contract tx-sender) initiator none)))
+        )
+        ;; For tokens on other chains, call adapter contract
+        (as-contract (try! (contract-call? (get adapter-contract source-chain-info) release-funds source-token net-amount (as-contract tx-sender) initiator)))
+      )
+      
+      ;; Update available liquidity
+      (map-set liquidity-pools
+        { chain-id: source-chain, token-id: source-token }
+        (merge source-pool {
+          committed-liquidity: (- (get committed-liquidity source-pool) net-amount),
+          available-liquidity: (+ (get available-liquidity source-pool) net-amount),
+          last-updated: block-height
+        })
+      )
+      
+      ;; Mark swap as refunded
+      (map-set swaps
+        { swap-id: swap-id }
+        (merge swap {
+          status: u2, ;; Refunded
+          completion-block: (some block-height)
+        })
+      )
+      
+      ;; Transfer protocol fee to treasury
+      (as-contract (try! (stx-transfer? protocol-fee (as-contract tx-sender) (var-get treasury-address))))
+      
+      (ok { 
+        swap-id: swap-id, 
+        refunded-amount: net-amount,
+        fee-kept: protocol-fee
+      })
+    )
+  )
+)
+
+;; Find optimal route for cross-chain swap
+(define-public (find-optimal-route
+  (source-chain (string-ascii 20))
+  (source-token (string-ascii 20))
+  (source-amount uint)
+  (target-chain (string-ascii 20))
+  (target-token (string-ascii 20)))
+  
+  (let (
+    (route-id (var-get next-route-id))
+    (best-path (get-optimal-path source-chain source-token target-chain target-token))
+    (estimated-output (get-estimated-output source-chain source-token source-amount target-chain target-token))
+  )
+    (asserts! (is-ok best-path) err-invalid-route)
+    (asserts! (is-ok estimated-output) err-invalid-route)
+    
+    (let (
+      (path (unwrap-panic best-path))
+      (output (unwrap-panic estimated-output))
+      (protocol-fee (/ (* source-amount (var-get protocol-fee-bp)) u10000))
+      (gas-estimate (estimate-gas-cost path))
+    )
+      ;; Cache the route
+      (map-set route-cache
+        { route-id: route-id }
+        {
+          source-chain: source-chain,
+          source-token: source-token,
+          target-chain: target-chain,
+          target-token: target-token,
+          path: path,
+          estimated-output: output,
+          estimated-fees: protocol-fee,
+          timestamp: block-height,
+          expiry: (+ block-height u72), ;; 12 hour route cache
+          gas-estimate: gas-estimate
+        }
+      )
+      
+      ;; Increment route ID
+      (var-set next-route-id (+ route-id u1))
+      
+      (ok { 
+        route-id: route-id, 
+        path: path,
+        estimated-output: output,
+        estimated-fees: protocol-fee,
+        gas-estimate: gas-estimate
+      })
+    )
+  )
+)
+
+;; Helper to get optimal path (simplified version)
+(define-private (get-optimal-path
+  (source-chain (string-ascii 20))
+  (source-token (string-ascii 20))
+  (target-chain (string-ascii 20))
+  (target-token (string-ascii 20)))
+  
+  ;; In a real implementation, this would use a graph algorithm to find optimal paths
+  ;; For demonstration, we'll create a simple direct path
+  (let (
+    (source-pool (map-get? liquidity-pools { chain-id: source-chain, token-id: source-token }))
+    (target-pool (map-get? liquidity-pools { chain-id: target-chain, token-id: target-token }))
+    (token-mapping (map-get? token-mappings { 
+      source-chain: source-chain, 
+      source-token: source-token, 
+      target-chain: target-chain 
+    }))
+  )
+    (if (and (is-some source-pool) (is-some target-pool) (is-some token-mapping))
+      (ok (list 
+        { chain: source-chain, token: source-token, pool: (get token-contract (unwrap-panic source-pool)) }
+        { chain: target-chain, token: target-token, pool: (get token-contract (unwrap-panic target-pool)) }
+      ))
+      err-invalid-route
+    )
+  )
+)  
