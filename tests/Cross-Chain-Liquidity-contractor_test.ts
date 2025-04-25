@@ -41,38 +41,40 @@
       "bitcoin" "Bitcoin" .mock-bitcoin-adapter u6 u600 "BTC" "native" u5000 u20))
     (try! (contract-call? .cross-chain-liquidity-aggregator register-chain 
       "ethereum" "Ethereum" .mock-ethereum-adapter u12 u15 "ETH" "bridged" u8000 u15))
-      ;; Register test pools
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
-        "stacks" "stx" .mock-stx-token u1000000 u1000000000 u30))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
-        "stacks" "xbtc" .mock-xbtc-token u100000 u1000000000 u40))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
-        "bitcoin" "btc" .mock-btc-token u10000 u1000000000 u20))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
-        "ethereum" "eth" .mock-eth-token u500000 u1000000000 u25))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
-        "ethereum" "wbtc" .mock-wbtc-token u100000 u1000000000 u35))
-      
-      ;; Setup token mappings
-      (try! (contract-call? .cross-chain-liquidity-aggregator map-token
-        "stacks" "xbtc" "bitcoin" "btc"))
-      (try! (contract-call? .cross-chain-liquidity-aggregator map-token
-        "bitcoin" "btc" "ethereum" "wbtc"))
-      (try! (contract-call? .cross-chain-liquidity-aggregator map-token
-        "stacks" "stx" "ethereum" "eth"))
-      
-      ;; Register oracles
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
-        "stacks" "stx" .mock-stx-oracle u144 u300))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
-        "stacks" "xbtc" .mock-xbtc-oracle u144 u300))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
-        "bitcoin" "btc" .mock-btc-oracle u144 u300))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
-        "ethereum" "eth" .mock-eth-oracle u144 u300))
-      (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
-        "ethereum" "wbtc" .mock-wbtc-oracle u144 u300))
-        ;; Authorize test relayer
+    
+    ;; Register test pools
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "stacks" "stx" .mock-stx-token u1000000 u1000000000 u30))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "stacks" "xbtc" .mock-xbtc-token u100000 u1000000000 u40))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "bitcoin" "btc" .mock-btc-token u10000 u1000000000 u20))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "ethereum" "eth" .mock-eth-token u500000 u1000000000 u25))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "ethereum" "wbtc" .mock-wbtc-token u100000 u1000000000 u35))
+    
+    ;; Setup token mappings
+    (try! (contract-call? .cross-chain-liquidity-aggregator map-token
+      "stacks" "xbtc" "bitcoin" "btc"))
+    (try! (contract-call? .cross-chain-liquidity-aggregator map-token
+      "bitcoin" "btc" "ethereum" "wbtc"))
+    (try! (contract-call? .cross-chain-liquidity-aggregator map-token
+      "stacks" "stx" "ethereum" "eth"))
+    
+    ;; Register oracles
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
+      "stacks" "stx" .mock-stx-oracle u144 u300))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
+      "stacks" "xbtc" .mock-xbtc-oracle u144 u300))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
+      "bitcoin" "btc" .mock-btc-oracle u144 u300))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
+      "ethereum" "eth" .mock-eth-oracle u144 u300))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
+      "ethereum" "wbtc" .mock-wbtc-oracle u144 u300))
+    
+    ;; Authorize test relayer
     (try! (contract-call? .cross-chain-liquidity-aggregator authorize-relayer
       test-relayer (list "stacks" "bitcoin" "ethereum")))
     
