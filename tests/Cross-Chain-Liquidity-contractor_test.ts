@@ -1,26 +1,43 @@
+;; Cross-Chain Liquidity Aggregator Tests
+;; A test suite for testing the cross-chain liquidity aggregator contract
 
-import { Clarinet, Tx, Chain, Account, types } from 'https://deno.land/x/clarinet@v0.14.0/index.ts';
-import { assertEquals } from 'https://deno.land/std@0.90.0/testing/asserts.ts';
+(use-trait ft-trait .sip-010-trait.sip-010-trait)
 
-Clarinet.test({
-    name: "Ensure that <...>",
-    async fn(chain: Chain, accounts: Map<string, Account>) {
-        let block = chain.mineBlock([
-            /* 
-             * Add transactions with: 
-             * Tx.contractCall(...)
-            */
-        ]);
-        assertEquals(block.receipts.length, 0);
-        assertEquals(block.height, 2);
+;; Mock contracts for testing
+(define-trait mock-adapter-trait
+  (
+    (lock-funds (string-ascii 20) uint principal principal (response bool uint))
+    (release-funds (string-ascii 20) uint principal principal (response bool uint))
+  )
+)
 
-        block = chain.mineBlock([
-            /* 
-             * Add transactions with: 
-             * Tx.contractCall(...)
-            */
-        ]);
-        assertEquals(block.receipts.length, 0);
-        assertEquals(block.height, 3);
-    },
-});
+(define-trait mock-oracle-trait
+  (
+    (get-price (string-ascii 20) (response uint uint))
+  )
+)
+
+;; Test constants
+(define-constant contract-owner tx-sender)
+(define-constant test-user 'ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5)
+(define-constant test-relayer 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG)
+(define-constant test-treasury 'ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC)
+(define-constant test-recipient 'ST2REHHS5J3CERCRBEPMGH7921Q6PYKAADT7JP2VB)
+
+;; Error constants for test assertions
+(define-constant err-tx-failed u999)
+(define-constant err-test-failed u998)
+
+;; Test setup
+(define-public (setup-environment)
+  (begin
+    ;; Initialize the main contract
+    (try! (contract-call? .cross-chain-liquidity-aggregator initialize test-treasury))
+    
+    ;; Register test chains
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-chain 
+      "stacks" "Stacks Blockchain" .mock-stacks-adapter u1 u600 "STX" "native" u1000 u10))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-chain 
+      "bitcoin" "Bitcoin" .mock-bitcoin-adapter u6 u600 "BTC" "native" u5000 u20))
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-chain 
+      "ethereum" "Ethereum" .mock-ethereum-adapter u12 u15 "ETH" "bridged" u8000 u15))

@@ -1,4 +1,4 @@
- Cross-Chain Liquidity Aggregator
+ ;; Cross-Chain Liquidity Aggregator
 ;; A protocol that aggregates liquidity from multiple chains using Bitcoin and Stacks as a settlement layer
 
 (define-constant contract-owner tx-sender)
