@@ -72,3 +72,113 @@
         "ethereum" "eth" .mock-eth-oracle u144 u300))
       (try! (contract-call? .cross-chain-liquidity-aggregator register-oracle
         "ethereum" "wbtc" .mock-wbtc-oracle u144 u300))
+        ;; Authorize test relayer
+    (try! (contract-call? .cross-chain-liquidity-aggregator authorize-relayer
+      test-relayer (list "stacks" "bitcoin" "ethereum")))
+    
+    ;; Set initial prices
+    (as-contract (try! (contract-call? .mock-stx-oracle set-mock-price "stx" u1000000)))
+    (as-contract (try! (contract-call? .mock-xbtc-oracle set-mock-price "xbtc" u2500000000)))
+    (as-contract (try! (contract-call? .mock-btc-oracle set-mock-price "btc" u2500000000)))
+    (as-contract (try! (contract-call? .mock-eth-oracle set-mock-price "eth" u15000000)))
+    (as-contract (try! (contract-call? .mock-wbtc-oracle set-mock-price "wbtc" u2500000000)))
+    
+    ;; Update prices in main contract
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator update-price "stacks" "stx" u1000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator update-price "stacks" "xbtc" u2500000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator update-price "bitcoin" "btc" u2500000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator update-price "ethereum" "eth" u15000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator update-price "ethereum" "wbtc" u2500000000)))
+    
+    ;; Add initial liquidity
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator add-liquidity "stacks" "stx" u1000000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator add-liquidity "stacks" "xbtc" u10000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator add-liquidity "bitcoin" "btc" u1000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator add-liquidity "ethereum" "eth" u10000000)))
+    (as-contract (try! (contract-call? .cross-chain-liquidity-aggregator add-liquidity "ethereum" "wbtc" u1000000)))
+    
+    (ok true)
+  )
+)
+
+;; Test chain registration
+(define-public (test-chain-registration)
+  (begin
+    ;; Test successful registration
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-chain 
+      "solana" "Solana" .mock-solana-adapter u1 u500 "SOL" "bridged" u2000 u15))
+    
+    ;; Test chain exists error
+    (asserts! (is-err (contract-call? .cross-chain-liquidity-aggregator register-chain 
+      "solana" "Solana Duplicate" .mock-solana-adapter u1 u500 "SOL" "bridged" u2000 u15)) 
+      err-test-failed)
+    
+    ;; Test unauthorized access
+    (asserts! (is-err (as-contract (contract-call? .cross-chain-liquidity-aggregator register-chain 
+      "avalanche" "Avalanche" .mock-avalanche-adapter u1 u2 "AVAX" "bridged" u3000 u15)))
+      err-test-failed)
+    
+    ;; Verify chain was added correctly
+    (let ((chain (contract-call? .cross-chain-liquidity-aggregator get-chain "solana")))
+      (asserts! (is-some chain) err-test-failed)
+      (asserts! (is-eq (get name (unwrap-panic chain)) "Solana") err-test-failed)
+    )
+    
+    (ok true)
+  )
+)
+
+;; Test pool registration
+(define-public (test-pool-registration)
+  (begin
+    ;; Register a new pool
+    (try! (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "solana" "sol" .mock-sol-token u200000 u100000000 u30))
+    
+    ;; Test pool exists error
+    (asserts! (is-err (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "solana" "sol" .mock-sol-token u200000 u100000000 u30))
+      err-test-failed)
+    
+    ;; Test unauthorized access
+    (asserts! (is-err (as-contract (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "solana" "usdc" .mock-usdc-token u100000 u10000000 u20)))
+      err-test-failed)
+    
+    ;; Test invalid parameters (min > max)
+    (asserts! (is-err (contract-call? .cross-chain-liquidity-aggregator register-pool 
+      "solana" "usdc" .mock-usdc-token u10000000 u100000 u20))
+      err-test-failed)
+    
+    ;; Verify pool was added correctly
+    (let ((pool (contract-call? .cross-chain-liquidity-aggregator get-pool "solana" "sol")))
+      (asserts! (is-some pool) err-test-failed)
+      (asserts! (is-eq (get token-contract (unwrap-panic pool)) .mock-sol-token) err-test-failed)
+      (asserts! (is-eq (get fee-bp (unwrap-panic pool)) u30) err-test-failed)
+    )
+    
+    (ok true)
+  )
+)
+
+;; Test token mapping
+(define-public (test-token-mapping)
+  (begin
+    ;; Create mappings
+    (try! (contract-call? .cross-chain-liquidity-aggregator map-token
+      "stacks" "stx" "solana" "sol"))
+    
+    ;; Verify mappings
+    (let (
+      (forward-mapping (contract-call? .cross-chain-liquidity-aggregator get-token-mapping "stacks" "stx" "solana"))
+      (reverse-mapping (contract-call? .cross-chain-liquidity-aggregator get-token-mapping "solana" "sol" "stacks"))
+    )
+      (asserts! (is-some forward-mapping) err-test-failed)
+      (asserts! (is-eq (get target-token (unwrap-panic forward-mapping)) "sol") err-test-failed)
+      (asserts! (is-some reverse-mapping) err-test-failed)
+      (asserts! (is-eq (get target-token (unwrap-panic reverse-mapping)) "stx") err-test-failed)
+    )
+    
+    (ok true)
+  )
+)
